@@ -1,0 +1,19 @@
+{
+  "name": "ccairn-librarian",
+  "version": "1.0.0",
+  "description": "Steward the project .claude/ directory — catalog, audit, split CLAUDE.md, migrate user→project, prune, archive, persist reference docs, path-gate rules. The home base between trips. Companion plugin to ccairn-handoff.",
+  "author": {
+    "name": "Micah",
+    "url": "https://github.com/micahchoo"
+  },
+  "homepage": "https://github.com/micahchoo/ccairn-librarian",
+  "repository": "https://github.com/micahchoo/ccairn-librarian",
+  "license": "MIT",
+  "keywords": [
+    "librarian",
+    "claude-code",
+    "documentation",
+    "knowledge-management",
+    "project-organization"
+  ]
+}
