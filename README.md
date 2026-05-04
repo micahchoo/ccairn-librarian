@@ -1,21 +1,38 @@
 # ccairn-librarian
 
+> Part of the **ccairn** family of Claude Code plugins for session lifecycle.
+> Companions: [ccairn-handoff](https://github.com/micahchoo/ccairn-handoff) (session boundaries) · ccairn-librarian (this — `.claude/` stewardship).
+> Family overview: [github.com/micahchoo/ccairn](https://github.com/micahchoo/ccairn).
+
 > *Cairns are stone markers left by previous travelers showing the way through unfamiliar terrain. The librarian tends the trail map between trips.*
 
-**A `.claude/` directory steward for Claude Code.** Catalog, audit, split bloated CLAUDE.md files, migrate user→project content, prune dead skills, persist reference docs, path-gate rules. The home base between trips — not the trip itself.
+**A `.claude/` directory steward for Claude Code.** Catalog, audit, split bloated CLAUDE.md files, migrate user→project content, prune dead skills, persist reference docs, path-gate rules.
+
+**State-driven, not event-driven.** Where ccairn-handoff fires when there is a specific *artifact* to act on (a HANDOFF.md), ccairn-librarian fires when the directory has *drifted* — INDEX.md gone stale, CLAUDE.md bloated, memory files past TTL. Conditions, not triggers.
 
 ## Who this is for
 
 You have a `.claude/` directory that's grown organically — skills you forget you installed, a CLAUDE.md that's drifted past 200 lines, reference docs scattered across `~/.claude/` and the project, rules that fire on every file because they don't have `paths:` frontmatter. You want a structured way to clean it up and keep it clean.
 
-## Companion plugin
+## Install order & what changes when both plugins are present
 
-This is the sibling of **[ccairn-handoff](https://github.com/micahchoo/ccairn-handoff)** — the session-continuity plugin (`/handoff`, `/check-handoff`, `/triage`). Together they cover the full session lifecycle:
+Either order works — neither plugin depends on the other. Common sequencing:
 
-- **ccairn-handoff** — wrap up cleanly, resume cleanly, close the loop on auto-created issues. *Markers for the next traveler.*
-- **ccairn-librarian** — between sessions, keep the home base organized. *The trail map.*
+1. **Install ccairn-handoff first** if your immediate pain is *running out of context mid-session*. You'll get `/handoff`, `/check-handoff`, `/triage`, and a SessionStart hook that detects HANDOFF.md.
+2. **Install ccairn-librarian second** when you notice `.claude/` rot — bloated CLAUDE.md, mystery skills, stale reference docs.
 
-Install both for the complete cycle.
+When both are installed:
+
+| Surface | Owns | Doesn't overlap because |
+|---|---|---|
+| `HANDOFF.md` lifecycle | ccairn-handoff | librarian doesn't touch session artifacts. |
+| `.claude/INDEX.md`, `rules/`, `docs/`, `archive/` | ccairn-librarian | handoff doesn't reorganize the directory. |
+| SessionStart "you have a HANDOFF.md, run /check-handoff" | ccairn-handoff (`detect-handoff.sh`) | Single artifact, single nudge. |
+| SessionStart "your .claude/ has drifted" | ccairn-librarian (`ccairn-librarian-bus.sh`) | Composite directory state, single dispatcher (one bash spawn). |
+| Architectural snapshot of `.claude/` (hooks/skills/plugins) | ccairn-handoff (`config-lens-structural.sh`) — used to populate HANDOFF.md's Infrastructure Delta section. | librarian's `metastructure-audit.sh` is *meta*structure (depth budgets, MANIFEST/EXPIRATION markers) — orthogonal lens on the same substrate. |
+| Quieting nudges per project | Both honor `.claude/.ccairn-quiet` | Shared family flag silences both plugins' SessionStart output. |
+
+Family overview repo: **[github.com/micahchoo/ccairn](https://github.com/micahchoo/ccairn)** — manifest of plugins, design philosophy, and the family axes (boundary / steward / future learning loop).
 
 ## Quick start
 
@@ -48,10 +65,11 @@ The bundled SessionStart hooks will surface stale-`.claude/` conditions, missing
 |---|---|
 | `skills/librarian/SKILL.md` | The librarian skill — 8 duties (catalog, audit, split, migrate, prune, persist, path-gate, cross-reference). Operates in **manual** or **signal-driven** mode depending on whether SessionStart hooks have populated caches. |
 | `commands/librarian.md` | `/librarian` slash command. |
-| `hooks/hooks.json` + `hooks/scripts/detect-stale-claude.sh` | SessionStart hook — detects stale INDEX.md, bloated CLAUDE.md, untouched `.claude/`, gitignore gaps. Quiet on success. |
-| `scripts/check-memory-freshness.sh` | SessionStart hook — flags Claude Code memory files past their `ttl-days`. |
-| `scripts/claude-md-nudge.sh` | SessionStart hook — flags missing or stale project CLAUDE.md. |
-| `scripts/metastructure-audit.sh` | On-demand audit — depth budgets, MANIFEST/EXPIRATION/GENERATOR markers, cross-world reference provenance. Run via `bash ${CLAUDE_PLUGIN_ROOT}/scripts/metastructure-audit.sh [ROOT]`. |
+| `hooks/hooks.json` + `hooks/scripts/ccairn-librarian-bus.sh` | **Single SessionStart dispatcher** — runs all three observability checks in one bash spawn (keeps SessionStart latency flat instead of 3× the cost). Honors `.claude/.ccairn-quiet` to silence per project. |
+| `hooks/scripts/detect-stale-claude.sh` | Detection script — INDEX.md staleness, bloated CLAUDE.md, untouched `.claude/`, gitignore gaps. Invoked by the bus; also runnable standalone. |
+| `scripts/check-memory-freshness.sh` | Detection script — Claude Code memory files past their `ttl-days`. Invoked by the bus; also runnable standalone. |
+| `scripts/claude-md-nudge.sh` | Detection script — missing or stale project CLAUDE.md. Invoked by the bus; also runnable standalone. |
+| `scripts/metastructure-audit.sh` | On-demand audit (not in the bus) — depth budgets, MANIFEST/EXPIRATION/GENERATOR markers, cross-world reference provenance. Run via `bash ${CLAUDE_PLUGIN_ROOT}/scripts/metastructure-audit.sh [ROOT]`. |
 | `scripts/lib/hook-stdin.sh` | Shared utility — captures `session_id` from SessionStart JSON for hooks that need it. |
 
 ## The 8 duties (summary)
@@ -89,21 +107,23 @@ If your `.claude/` doesn't move toward these over time, the plugin needs tuning,
 
 The skill's [Cached Signals section](skills/librarian/SKILL.md) maps each bundled producer to the duty it should route to.
 
+## Extension points (BYO signal sources)
+
+The librarian skill operates on cached signals — read from stdout, route to a duty, cite the cache and finding line. Bundled producers cover the common cases. Three additional signal sources are deliberately **out-of-band** because they require project-specific test corpora or external pipelines this plugin does not ship; they are documented as extension points, not missing features:
+
+| Signal source | What it produces | Why out-of-band | How to wire your own |
+|---|---|---|---|
+| **Orphan / doc↔code drift** | `[HIGH] orphan: <file> — write-only output` lines | Detection rules over-fit to one `~/.claude/` convention set; portability requires a rewrite. | Write a script that emits findings on stdout in `[SEVERITY] <class>: <message>` format; run it before invoking `/librarian`; the skill consumes it identically to bundled producers. |
+| **Router recall scorecard** | `M1 PASS: 18/24 (75%)` style metric lines | Current implementation has hardcoded test prompts for a specific skill set; needs a per-project test-prompt registry. | Maintain `.claude/.test-prompts.json`, wrap a recall test against your `/skills/`, emit `M1 PASS|FAIL` lines. |
+| **Expertise vs anti-pattern density** | `expertise-gap: <domain>` per-domain ratios | Needs a `mulch` install and an anti-pattern report pipeline (e.g. `anti-pattern-report.txt`) the plugin doesn't bundle. | If you run the [mulch](https://github.com/jayminwest/mulch) CLI plus an anti-pattern scanner, pipe the comparison into stdout and route to Duty 6 (persist). |
+
+The contract is intentionally minimal: emit findings on stdout, one per line, prefixed by something the user can read. The librarian skill treats any such producer the same as bundled ones — read, route to a duty, act.
+
 ## Roadmap
 
-Bundled in v1.x:
-- ✅ **SessionStart "stale `.claude/`" hook** — INDEX.md staleness, CLAUDE.md bloat, `.claude/` activity drift, gitignore gaps.
-- ✅ **Memory freshness hook** — flags Claude Code memory files past TTL.
-- ✅ **CLAUDE.md nudge hook** — flags missing or stale project CLAUDE.md.
-- ✅ **Metastructure audit script** — on-demand depth/MANIFEST/EXPIRATION audits.
-
-Deferred (need refactoring or external pipelines this plugin doesn't ship):
-- **`observability-scan.sh`** — orphan/drift detection. Overfits to one user's `~/.claude/` conventions; would need a portable rewrite to be useful in arbitrary projects.
-- **`measure-leverage.sh`** — router recall scorecard. Currently uses hardcoded test prompts for a specific skill set; would need a per-project test-prompt registry to generalize.
-- **`expertise-vs-antipatterns.sh`** — flags mulch domains where anti-pattern density exceeds pattern density. Needs an anti-pattern report pipeline that isn't bundled here.
-- **Skill-recommendation triage** — would consume `.claude/SUGGESTED_SKILLS.md` produced by upstream automation; that aggregator script isn't bundled.
-
-If you have these scripts available locally and want their signals, point the librarian at their stdout manually before deciding which duty to enter — see the skill's "Deferred scripts" note.
+- **Skill-recommendation triage** — consume `.claude/SUGGESTED_SKILLS.md` produced by an upstream aggregator (out-of-scope for v1; the aggregator script isn't bundled).
+- **First-run config wizard** — instead of always-on nudges, prompt once per project: "watch this `.claude/` for drift? (y/n)". Would replace the current opt-out via `.ccairn-quiet` with explicit opt-in. Requires SessionStart hooks that can prompt interactively, which the plugin runtime currently doesn't expose.
+- **Pluggable signal-source registry** — formalize the BYO contract above into a config file (`.claude/.ccairn-librarian-signals.json`) listing extra producers to invoke from the bus.
 
 ## License
 

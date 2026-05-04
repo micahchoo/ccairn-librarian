@@ -193,20 +193,17 @@ When other workflows complete, route here to capture what they learned:
 
 ---
 
-## Roadmap (advanced cached-signal integrations)
+## Quieting the SessionStart bus
 
-The full version of this skill in standalone configs reads from a SessionStart cache pipeline producing signals that auto-route to specific duties:
+The bundled SessionStart dispatcher (`hooks/scripts/ccairn-librarian-bus.sh`) emits findings as nudges. To silence them per-project without uninstalling the plugin, create:
 
-- `readme-seam-check.sh` (already bundled in **ccairn-handoff**) → §6 persist, §1 catalog, §5 prune
-- `observability-scan.sh` → §1 orphan detection, §5 prune (write-only outputs, doc↔code drift)
-- `metastructure-audit.sh` → §3 split, §8 cross-ref (depth/MANIFEST/EXPIRATION violations)
-- `measure-leverage.sh` → §1 catalog, §4 migrate (deprecated refs, memory TTL)
-- `check-memory-freshness.sh` → §5 prune/freshen (memory files >30d without verification)
-- `expertise-vs-antipatterns.sh` → §6 persist (mulch domains where anti-pattern density > pattern density)
+```
+.claude/.ccairn-quiet
+```
 
-These scripts are not bundled in v1 of `ccairn-librarian`. Without them, the librarian operates in **manual mode** — you invoke it explicitly, it walks duties on demand. With them, it would operate in **signal-driven mode** — SessionStart caches surface what needs attention and the librarian acts on cited evidence.
+The dispatcher exits silently when this file exists. Useful for projects where you don't want stewardship nudges (e.g. throwaway scratch repos, projects another tool already manages). The flag is shared with other `ccairn-*` plugins — same file silences any family member's SessionStart output.
 
-If you have these scripts available locally and want the auto-signal flow, point this skill at them by reading their stdout before deciding which duty to enter. v1.x candidate: bundle a default observability suite.
+---
 
 `[eval: cataloged]` After Duty 1 runs, `.claude/INDEX.md` reflects current filesystem state — no orphans uncataloged, no entries pointing at deleted files.
 `[eval: split-target-met]` After Duty 3 runs, root CLAUDE.md is <80 lines and content was distributed by type, not chunked arbitrarily.
