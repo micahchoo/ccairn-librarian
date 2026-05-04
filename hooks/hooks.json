@@ -1,0 +1,23 @@
+{
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/detect-stale-claude.sh",
+          "timeout": 5
+        },
+        {
+          "type": "command",
+          "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/check-memory-freshness.sh",
+          "timeout": 5
+        },
+        {
+          "type": "command",
+          "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/claude-md-nudge.sh",
+          "timeout": 5
+        }
+      ]
+    }
+  ]
+}

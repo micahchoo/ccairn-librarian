@@ -25,7 +25,24 @@ Steward this project's `.claude/` directory. Mandate: maximize what lives in **p
 
 **Decision test:** *"Would a new teammate benefit?"* → project `.claude/`. Otherwise → personal.
 
-This is the v1 scope. Advanced cached-signal integrations (auto-detection of orphaned outputs, metastructure violations, leverage drift) are roadmap candidates — see `## Roadmap` at the bottom.
+Two operating modes: **manual** (you invoke the skill, it walks duties on demand) and **signal-driven** (SessionStart hooks surface findings; you act on cited evidence). The signal-driven mode activates when the bundled observability scripts run at SessionStart — no setup needed beyond installing the plugin.
+
+---
+
+## Cached Signals (check before acting)
+
+When operating in signal-driven mode, the bundled SessionStart hooks emit findings before any user prompt. Read these before deciding what duty to enter — don't re-derive from scratch. Cite the cache and finding line in any recommendation you make to the user.
+
+| Cache / producer | Finding shape | Maps to duty |
+|---|---|---|
+| `${CLAUDE_PLUGIN_ROOT}/hooks/scripts/detect-stale-claude.sh` (SessionStart) | INDEX.md missing or >30d stale · CLAUDE.md >80 lines · `.claude/` untouched while project active · `.gitignore` doesn't exclude `settings.local.json` | Duty 1, 3, 2, 2 (respectively) |
+| `${CLAUDE_PLUGIN_ROOT}/scripts/check-memory-freshness.sh` (SessionStart) | memory files past their `ttl-days` (default 30d) without verification | Duty 5 (prune/freshen) |
+| `${CLAUDE_PLUGIN_ROOT}/scripts/claude-md-nudge.sh` (SessionStart) | project CLAUDE.md absent, or stale (>30d) | Duty 3 (split — bootstrap from nudge if missing) |
+| `${CLAUDE_PLUGIN_ROOT}/scripts/metastructure-audit.sh` (on-demand: `bash <path> [ROOT]`) | top-level dirs missing MANIFEST · depth >6 · `drafts/`/`spikes/` without EXPIRATION · `generated/` without GENERATOR · `shared/` without manifest · cross-world refs missing provenance | Duty 3 (split), Duty 8 (cross-ref) |
+
+Gate: only act on a signal if its cache exists for this session (absence ≠ clean — producer may have failed or skipped). When a hook fires with findings, your first action should be to address them before unrelated work.
+
+**Deferred scripts (not bundled in v1.x):** `observability-scan.sh` (orphan/drift detection — overfits user-specific conventions), `measure-leverage.sh` (router recall — hardcoded test prompts), `expertise-vs-antipatterns.sh` (mulch density vs anti-pattern density — needs anti-pattern report pipeline). If you have these locally and want their signals, point this skill at their stdout manually before deciding which duty to enter.
 
 ---
 

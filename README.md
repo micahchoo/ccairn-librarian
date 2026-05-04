@@ -34,10 +34,25 @@ Or add via your Claude Code marketplace flow once published.
 
 ## What you get
 
+### User surface
+
+| Command | Use when |
+|---|---|
+| `/librarian` | You want to audit `.claude/`, run a specific duty, or address a SessionStart finding. |
+
+The bundled SessionStart hooks will surface stale-`.claude/` conditions, missing CLAUDE.md, stale memory files, etc. — when they fire with findings, the natural next step is `/librarian`.
+
+### Under the hood
+
 | Component | What it does |
 |---|---|
-| `skills/librarian/` | The librarian skill — 8 duties (catalog, audit, split, migrate, prune, persist, path-gate, cross-reference). |
+| `skills/librarian/SKILL.md` | The librarian skill — 8 duties (catalog, audit, split, migrate, prune, persist, path-gate, cross-reference). Operates in **manual** or **signal-driven** mode depending on whether SessionStart hooks have populated caches. |
 | `commands/librarian.md` | `/librarian` slash command. |
+| `hooks/hooks.json` + `hooks/scripts/detect-stale-claude.sh` | SessionStart hook — detects stale INDEX.md, bloated CLAUDE.md, untouched `.claude/`, gitignore gaps. Quiet on success. |
+| `scripts/check-memory-freshness.sh` | SessionStart hook — flags Claude Code memory files past their `ttl-days`. |
+| `scripts/claude-md-nudge.sh` | SessionStart hook — flags missing or stale project CLAUDE.md. |
+| `scripts/metastructure-audit.sh` | On-demand audit — depth budgets, MANIFEST/EXPIRATION/GENERATOR markers, cross-world reference provenance. Run via `bash ${CLAUDE_PLUGIN_ROOT}/scripts/metastructure-audit.sh [ROOT]`. |
+| `scripts/lib/hook-stdin.sh` | Shared utility — captures `session_id` from SessionStart JSON for hooks that need it. |
 
 ## The 8 duties (summary)
 
@@ -66,16 +81,29 @@ A working install of this plugin should produce these outcomes over time:
 
 If your `.claude/` doesn't move toward these over time, the plugin needs tuning, not patience.
 
+## Operating modes
+
+**Manual mode** — invoke `/librarian` explicitly; the skill walks duties on demand. Works in any project, no setup beyond install.
+
+**Signal-driven mode** — SessionStart hooks (bundled) surface findings before any user prompt. The skill reads the cached signals and routes directly to the relevant duty, citing the cache and finding line. No setup; activates whenever the hooks have something to report.
+
+The skill's [Cached Signals section](skills/librarian/SKILL.md) maps each bundled producer to the duty it should route to.
+
 ## Roadmap
 
-The full version of this skill in standalone configs feeds off a SessionStart cache pipeline of observability scripts (orphan detection, metastructure audit, leverage drift, memory freshness, expertise vs anti-patterns, claude-md nudge). v1 of this plugin ships **manual mode** only — you invoke `/librarian` and it walks duties on demand.
+Bundled in v1.x:
+- ✅ **SessionStart "stale `.claude/`" hook** — INDEX.md staleness, CLAUDE.md bloat, `.claude/` activity drift, gitignore gaps.
+- ✅ **Memory freshness hook** — flags Claude Code memory files past TTL.
+- ✅ **CLAUDE.md nudge hook** — flags missing or stale project CLAUDE.md.
+- ✅ **Metastructure audit script** — on-demand depth/MANIFEST/EXPIRATION audits.
 
-v1.x candidates:
-- **Bundle the observability suite** — ship the cached-signal scripts so librarian operates in signal-driven mode (auto-routes to specific duties based on cache content).
-- **SessionStart hook** — detect "stale `.claude/`" condition (e.g., INDEX.md older than 30d, CLAUDE.md grew past threshold) and surface a one-liner.
-- **Skill-recommendation triage** — process `.claude/SUGGESTED_SKILLS.md` produced by upstream automation.
+Deferred (need refactoring or external pipelines this plugin doesn't ship):
+- **`observability-scan.sh`** — orphan/drift detection. Overfits to one user's `~/.claude/` conventions; would need a portable rewrite to be useful in arbitrary projects.
+- **`measure-leverage.sh`** — router recall scorecard. Currently uses hardcoded test prompts for a specific skill set; would need a per-project test-prompt registry to generalize.
+- **`expertise-vs-antipatterns.sh`** — flags mulch domains where anti-pattern density exceeds pattern density. Needs an anti-pattern report pipeline that isn't bundled here.
+- **Skill-recommendation triage** — would consume `.claude/SUGGESTED_SKILLS.md` produced by upstream automation; that aggregator script isn't bundled.
 
-These are deliberately deferred to keep v1 focused and shippable today.
+If you have these scripts available locally and want their signals, point the librarian at their stdout manually before deciding which duty to enter — see the skill's "Deferred scripts" note.
 
 ## License
 
